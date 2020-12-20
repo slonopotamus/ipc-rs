@@ -250,7 +250,7 @@ impl Semaphore {
         // see QSharedMemoryPrivate::createUnixKeyFile in Qt
         let filename = filename.to_str().unwrap().to_string() + "\0";
         let fd = libc::open(
-            filename.as_ptr() as (*const i8),
+            filename.as_ptr() as *const i8,
             libc::O_EXCL | libc::O_CREAT | O_RDWR,
             0o640,
         );
@@ -291,7 +291,7 @@ impl Semaphore {
         }
 
         match Error::last_os_error() {
-            ref e if e.raw_os_error() == Some(libc::EAGAIN) => return false,
+            ref e if e.raw_os_error() == Some(libc::EAGAIN) => false,
             e => panic!("unknown try_wait error: {}", e),
         }
     }
@@ -334,7 +334,7 @@ mod tests {
     macro_rules! offset {
         ($ty:ty, $f:ident) => {
             unsafe {
-                let f = 0 as *const $ty;
+                let f = std::ptr::null::<$ty>();
                 &(*f).$f as *const _ as usize
             }
         };
@@ -344,7 +344,7 @@ mod tests {
     fn check_offsets() {
         let td = TempDir::new("test").unwrap();
         let mut f = File::create(&td.path().join("foo.c")).unwrap();
-        f.write(
+        f.write_all(
             &format!(
                 r#"
 #include <assert.h>
