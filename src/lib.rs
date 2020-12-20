@@ -31,8 +31,6 @@
 
 #![allow(non_camel_case_types)]
 
-extern crate libc;
-
 use std::io::Result;
 
 /// An atomic counter which can be shared across processes.
@@ -147,11 +145,9 @@ mod imp;
 
 #[cfg(test)]
 mod tests {
-    use Semaphore;
-
     #[test]
     fn smoke() {
-        let s = Semaphore::new("smoke", 1).unwrap();
+        let s = crate::Semaphore::new("smoke", 1).unwrap();
         drop(s.access());
         {
             let _g = s.access();
@@ -163,19 +159,19 @@ mod tests {
 
     #[test]
     fn create_twice() {
-        let _s1 = Semaphore::new("create_twice", 1).unwrap();
-        let _s2 = Semaphore::new("create_twice", 0).unwrap();
+        let _s1 = crate::Semaphore::new("create_twice", 1).unwrap();
+        let _s2 = crate::Semaphore::new("create_twice", 0).unwrap();
     }
 
     #[test]
     fn check_send() {
         fn send<S: Send>(_: &S) {}
-        send(&Semaphore::new("send", 1).unwrap());
+        send(&crate::Semaphore::new("send", 1).unwrap());
     }
 
     #[test]
     fn check_sync() {
         fn send<S: Sync>(_: &S) {}
-        send(&Semaphore::new("sync", 1).unwrap());
+        send(&crate::Semaphore::new("sync", 1).unwrap());
     }
 }

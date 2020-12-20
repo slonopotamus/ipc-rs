@@ -1,29 +1,19 @@
-use libc;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::i32;
 use std::io::{Error, Result};
+use winapi::shared::minwindef::DWORD;
+use winapi::um::handleapi::CloseHandle;
+use winapi::um::synchapi::{CreateSemaphoreW, ReleaseSemaphore, WaitForSingleObject};
+use winapi::um::winbase::{INFINITE, WAIT_OBJECT_0};
+use winapi::um::winnt::{HANDLE, LONG};
 
 pub struct Semaphore {
-    handle: libc::HANDLE,
+    handle: HANDLE,
 }
 
-pub const WAIT_FAILED: libc::DWORD = 0xFFFFFFFF;
-pub const WAIT_TIMEOUT: libc::DWORD = 0x00000102;
-
-extern "system" {
-    fn CreateSemaphoreW(
-        lpSemaphoreAttributes: libc::LPSECURITY_ATTRIBUTES,
-        lInitialCount: libc::LONG,
-        lMaximumCount: libc::LONG,
-        lpName: libc::LPCWSTR,
-    ) -> libc::HANDLE;
-    fn ReleaseSemaphore(
-        hSemaphore: libc::HANDLE,
-        lReleaseCount: libc::LONG,
-        lpPreviousCount: *mut libc::LONG,
-    ) -> libc::BOOL;
-}
+pub const WAIT_FAILED: DWORD = 0xFFFFFFFF;
+pub const WAIT_TIMEOUT: DWORD = 0x00000102;
 
 impl Semaphore {
     /// Get value hash
@@ -43,8 +33,8 @@ impl Semaphore {
         name.push(0);
         let handle = CreateSemaphoreW(
             std::ptr::null_mut(),
-            cnt as libc::LONG,
-            i32::MAX as libc::LONG,
+            cnt as LONG,
+            i32::MAX as LONG,
             name.as_ptr(),
         );
         if handle.is_null() {
@@ -55,16 +45,16 @@ impl Semaphore {
     }
 
     pub unsafe fn wait(&self) {
-        match libc::WaitForSingleObject(self.handle, libc::INFINITE) {
-            libc::WAIT_OBJECT_0 => {}
+        match WaitForSingleObject(self.handle, INFINITE) {
+            WAIT_OBJECT_0 => {}
             WAIT_FAILED => panic!("failed to wait: {}", Error::last_os_error()),
             n => panic!("bad wait(): {}/{}", n, Error::last_os_error()),
         }
     }
 
     pub unsafe fn try_wait(&self) -> bool {
-        match libc::WaitForSingleObject(self.handle, 0) {
-            libc::WAIT_OBJECT_0 => true,
+        match WaitForSingleObject(self.handle, 0) {
+            WAIT_OBJECT_0 => true,
             WAIT_TIMEOUT => false,
             WAIT_FAILED => panic!("failed to wait: {}", Error::last_os_error()),
             n => panic!("bad wait(): {}/{}", n, Error::last_os_error()),
@@ -84,7 +74,7 @@ unsafe impl Sync for Semaphore {}
 impl Drop for Semaphore {
     fn drop(&mut self) {
         unsafe {
-            libc::CloseHandle(self.handle);
+            CloseHandle(self.handle);
         }
     }
 }

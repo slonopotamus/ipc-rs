@@ -18,8 +18,7 @@
 
 #![allow(bad_style)]
 
-use libc;
-use libc::consts::os::posix88::{EEXIST, O_RDWR};
+use libc::{EEXIST, O_RDWR};
 use std::env;
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -37,8 +36,6 @@ pub struct Semaphore {
 
 #[cfg(target_os = "linux")]
 mod consts {
-    use libc;
-
     pub type key_t = i32;
 
     pub static IPC_CREAT: libc::c_int = 0o1000;
@@ -86,8 +83,6 @@ mod consts {
 
 #[cfg(target_os = "macos")]
 mod consts {
-    use libc;
-
     pub type key_t = i32;
 
     pub static IPC_CREAT: libc::c_int = 0o1000;
