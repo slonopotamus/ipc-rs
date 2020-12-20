@@ -4,8 +4,11 @@ version = "0.0.1"
 authors = ["Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
 
-[dependencies]
-libc = "0.1"
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["handleapi", "minwinbase", "synchapi", "winbase"] }
 
 [dev-dependencies]
 tempdir = "0.3"
