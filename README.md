@@ -1,6 +1,6 @@
 # ipc-rs
 
-[![Build Status](https://travis-ci.org/alexcrichton/ipc-rs.svg?branch=master)](https://travis-ci.org/alexcrichton/ipc-rs)
+[![CI](https://github.com/slonopotamus/ipc-rs/workflows/CI/badge.svg?branch=master)](https://github.com/slonopotamus/ipc-rs/actions?query=branch%3Amaster)
 
 [Documentation](http://alexcrichton.com/ipc-rs/ipc/index.html)
 
