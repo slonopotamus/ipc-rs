@@ -80,7 +80,7 @@ impl Semaphore {
     /// ```
     pub fn new(name: &str, cnt: usize) -> Result<Semaphore> {
         Ok(Semaphore {
-            inner: unsafe { try!(imp::Semaphore::new(name, cnt)) },
+            inner: unsafe { imp::Semaphore::new(name, cnt)? },
         })
     }
 

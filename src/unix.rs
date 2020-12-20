@@ -22,13 +22,14 @@ use libc;
 use libc::consts::os::posix88::{EEXIST, O_RDWR};
 use std::env;
 use std::fs;
-use std::hash::{Hash, Hasher, SipHasher};
+use std::hash::{Hash, Hasher};
 use std::io::{Error, ErrorKind, Result};
 use std::mem;
 use std::path::PathBuf;
 
 use self::consts::{key_t, sembuf, IPC_CREAT, IPC_EXCL, IPC_NOWAIT, SEM_UNDO};
 use self::consts::{semid_ds, IPC_RMID, IPC_STAT, SETVAL};
+use std::collections::hash_map::DefaultHasher;
 
 pub struct Semaphore {
     semid: libc::c_int,
@@ -142,7 +143,7 @@ extern "C" {
 
 impl Semaphore {
     pub unsafe fn new(name: &str, cnt: usize) -> Result<Semaphore> {
-        let key = try!(Semaphore::key(name));
+        let key = Semaphore::key(name)?;
 
         // System V semaphores cannot be initialized at creation, and we don't
         // know which process is responsible for creating the semaphore, so we
@@ -207,12 +208,12 @@ impl Semaphore {
         }
 
         // Phew! That took long enough...
-        Ok(Semaphore { semid: semid })
+        Ok(Semaphore { semid })
     }
 
     /// Get value hash
     fn hash<T: Hash>(value: &T) -> u64 {
-        let mut h = SipHasher::new();
+        let mut h = DefaultHasher::new();
         value.hash(&mut h);
         h.finish()
     }

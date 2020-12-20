@@ -1,5 +1,6 @@
 use libc;
-use std::hash::{Hash, Hasher, SipHasher};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::i32;
 use std::io::{Error, Result};
 
@@ -27,7 +28,7 @@ extern "system" {
 impl Semaphore {
     /// Get value hash
     fn hash<T: Hash>(value: &T) -> u64 {
-        let mut h = SipHasher::new();
+        let mut h = DefaultHasher::new();
         value.hash(&mut h);
         h.finish()
     }
@@ -41,7 +42,7 @@ impl Semaphore {
         let mut name = name.bytes().map(|b| b as u16).collect::<Vec<u16>>();
         name.push(0);
         let handle = CreateSemaphoreW(
-            0 as *mut _,
+            std::ptr::null_mut(),
             cnt as libc::LONG,
             i32::MAX as libc::LONG,
             name.as_ptr(),
@@ -49,7 +50,7 @@ impl Semaphore {
         if handle.is_null() {
             Err(Error::last_os_error())
         } else {
-            Ok(Semaphore { handle: handle })
+            Ok(Semaphore { handle })
         }
     }
 
@@ -71,9 +72,8 @@ impl Semaphore {
     }
 
     pub unsafe fn post(&self) {
-        match ReleaseSemaphore(self.handle, 1, 0 as *mut _) {
-            0 => panic!("failed to release semaphore: {}", Error::last_os_error()),
-            _ => {}
+        if let 0 = ReleaseSemaphore(self.handle, 1, std::ptr::null_mut()) {
+            panic!("failed to release semaphore: {}", Error::last_os_error())
         }
     }
 }
