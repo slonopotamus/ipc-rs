@@ -80,7 +80,7 @@ impl Semaphore {
     /// ```
     pub fn new(name: &str, cnt: usize) -> Result<Semaphore> {
         Ok(Semaphore {
-            inner: unsafe { try!(imp::Semaphore::new(name, cnt)) }
+            inner: unsafe { try!(imp::Semaphore::new(name, cnt)) },
         })
     }
 
@@ -88,20 +88,26 @@ impl Semaphore {
     ///
     /// This function will block until a resource is available (a count > 0),
     /// and then decrement it and return.
-    pub fn acquire(&self) { unsafe { self.inner.wait() } }
+    pub fn acquire(&self) {
+        unsafe { self.inner.wait() }
+    }
 
     /// Attempt to acquire a resource of this semaphore.
     ///
     /// This function is identical to `acquire` except that it will never
     /// blocked. This function returns `true` if a resource was acquired or
     /// `false` if one could not be acquired.
-    pub fn try_acquire(&self) -> bool { unsafe { self.inner.try_wait() } }
+    pub fn try_acquire(&self) -> bool {
+        unsafe { self.inner.try_wait() }
+    }
 
     /// Release a resource of this semaphore.
     ///
     /// This function will increment the count of this semaphore, waking up any
     /// waiters who would like the resource.
-    pub fn release(&self) { unsafe { self.inner.post() } }
+    pub fn release(&self) {
+        unsafe { self.inner.post() }
+    }
 
     /// Access a resource of this semaphore in a constrained scope.
     ///
@@ -132,8 +138,12 @@ impl<'a> Drop for Guard<'a> {
     }
 }
 
-#[cfg(unix)] #[path = "unix.rs"] mod imp;
-#[cfg(windows)] #[path = "windows.rs"] mod imp;
+#[cfg(unix)]
+#[path = "unix.rs"]
+mod imp;
+#[cfg(windows)]
+#[path = "windows.rs"]
+mod imp;
 
 #[cfg(test)]
 mod tests {

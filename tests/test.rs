@@ -53,9 +53,10 @@ fn first_pass() {
 fn run_test() {
     let test_exe = env::current_exe().unwrap();
     let output = Command::new(test_exe).arg("test1").output().unwrap();
-    assert! (output.status.success());
-    assert_eq! (str::from_utf8(&output.stdout).unwrap(),
-r#"Enter: test1
+    assert!(output.status.success());
+    assert_eq!(
+        str::from_utf8(&output.stdout).unwrap(),
+        r#"Enter: test1
 [0] Lock foo1
 [0] Start
 Enter: test1_inner
@@ -66,5 +67,6 @@ Enter: test1_inner
 Leave: test1_inner
 [0] Join
 Leave: test1
-"#);
+"#
+    );
 }
