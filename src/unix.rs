@@ -18,7 +18,7 @@
 
 #![allow(bad_style)]
 
-use libc::{EEXIST, O_RDWR};
+use libc::{sembuf, EEXIST, O_RDWR};
 use std::env;
 use std::fs;
 use std::hash::{Hash, Hasher};
@@ -26,8 +26,7 @@ use std::io::{Error, ErrorKind, Result};
 use std::mem;
 use std::path::PathBuf;
 
-use self::consts::{key_t, sembuf, IPC_CREAT, IPC_EXCL, IPC_NOWAIT, SEM_UNDO};
-use self::consts::{semid_ds, IPC_RMID, IPC_STAT, SETVAL};
+use self::consts::{semid_ds, SEM_UNDO, SETVAL};
 use std::collections::hash_map::DefaultHasher;
 
 pub struct Semaphore {
@@ -36,26 +35,13 @@ pub struct Semaphore {
 
 #[cfg(target_os = "linux")]
 mod consts {
-    pub type key_t = i32;
-
-    pub static IPC_CREAT: libc::c_int = 0o1000;
-    pub static IPC_EXCL: libc::c_int = 0o2000;
-    pub static IPC_NOWAIT: libc::c_short = 0o4000;
     pub static SEM_UNDO: libc::c_short = 0x1000;
     pub static SETVAL: libc::c_int = 16;
-    pub static IPC_STAT: libc::c_int = 2;
-    pub static IPC_RMID: libc::c_int = 0;
 
-    #[repr(C)]
-    pub struct sembuf {
-        pub sem_num: libc::c_ushort,
-        pub sem_op: libc::c_short,
-        pub sem_flg: libc::c_short,
-    }
-
+    // TODO: remove this when https://github.com/rust-lang/libc/issues/2002 is fixed
     #[repr(C)]
     pub struct semid_ds {
-        pub sem_perm: ipc_perm,
+        pub sem_perm: libc::ipc_perm,
         pub sem_otime: libc::time_t,
         __glibc_reserved1: libc::c_ulong,
         pub sem_ctime: libc::time_t,
@@ -64,76 +50,14 @@ mod consts {
         __glibc_reserved3: libc::c_ulong,
         __glibc_reserved4: libc::c_ulong,
     }
-
-    #[repr(C)]
-    pub struct ipc_perm {
-        pub __key: key_t,
-        pub uid: libc::uid_t,
-        pub gid: libc::gid_t,
-        pub cuid: libc::uid_t,
-        pub cgid: libc::gid_t,
-        pub mode: libc::c_ushort,
-        __pad1: libc::c_ushort,
-        pub __seq: libc::c_ushort,
-        __pad2: libc::c_ushort,
-        __glibc_reserved1: libc::c_ulong,
-        __glibc_reserved2: libc::c_ulong,
-    }
 }
 
 #[cfg(target_os = "macos")]
 mod consts {
-    pub type key_t = i32;
-
-    pub static IPC_CREAT: libc::c_int = 0o1000;
-    pub static IPC_EXCL: libc::c_int = 0o2000;
-    pub static IPC_NOWAIT: libc::c_short = 0o4000;
     pub static SEM_UNDO: libc::c_short = 0o10000;
     pub static SETVAL: libc::c_int = 8;
-    pub static IPC_STAT: libc::c_int = 2;
-    pub static IPC_RMID: libc::c_int = 0;
 
-    #[repr(C)]
-    pub struct sembuf {
-        pub sem_num: libc::c_ushort,
-        pub sem_op: libc::c_short,
-        pub sem_flg: libc::c_short,
-    }
-
-    // ugh, this is marked as pack(4) on OSX which apparently we can't
-    // emulate in rust yet! Instead we mark the structure as packed and then
-    // insert our own manual padding.
-    #[repr(C, packed)]
-    pub struct semid_ds {
-        pub sem_perm: ipc_perm,
-        _sem_base: i32,
-        pub sem_nsems: libc::c_ushort,
-        __my_padding_hax_ugh: libc::c_ushort,
-        pub sem_otime: libc::time_t,
-        _sem_pad1: i32,
-        pub sem_ctime: libc::time_t,
-
-        _sem_pad2: i32,
-        _sem_pad3: [i32; 4],
-    }
-
-    #[repr(C)]
-    pub struct ipc_perm {
-        pub uid: libc::uid_t,
-        pub gid: libc::gid_t,
-        pub cuid: libc::uid_t,
-        pub cgid: libc::gid_t,
-        pub mode: libc::mode_t,
-        pub __seq: libc::c_ushort,
-        pub __key: key_t,
-    }
-}
-
-extern "C" {
-    fn ftok(pathname: *const libc::c_uchar, proj_id: libc::c_int) -> key_t;
-    fn semget(key: key_t, nsems: libc::c_int, semflg: libc::c_int) -> libc::c_int;
-    fn semctl(semid: libc::c_int, semnum: libc::c_int, cmd: libc::c_int, ...) -> libc::c_int;
-    fn semop(semid: libc::c_int, sops: *mut sembuf, nsops: libc::c_uint) -> libc::c_int;
+    pub type semid_ds = libc::semid_ds;
 }
 
 impl Semaphore {
@@ -153,7 +77,7 @@ impl Semaphore {
         // around this...
         //
         // see http://beej.us/guide/bgipc/output/html/multipage/semaphores.html
-        let mut semid = semget(key, 1, IPC_CREAT | IPC_EXCL | 0o666);
+        let mut semid = libc::semget(key, 1, libc::IPC_CREAT | libc::IPC_EXCL | 0o666);
         if semid >= 0 {
             let mut buf = sembuf {
                 sem_num: 0,
@@ -164,9 +88,9 @@ impl Semaphore {
             // onto it. The clamp is necessary as the initial value seems to be
             // generally undefined, and the bump is then necessary to modify
             // sem_otime.
-            if semctl(semid, 0, SETVAL, 0) != 0 || semop(semid, &mut buf, 1) != 0 {
+            if libc::semctl(semid, 0, SETVAL, 0) != 0 || libc::semop(semid, &mut buf, 1) != 0 {
                 let err = Error::last_os_error();
-                semctl(semid, 0, IPC_RMID);
+                libc::semctl(semid, 0, libc::IPC_RMID);
                 return Err(err);
             }
         } else {
@@ -174,7 +98,7 @@ impl Semaphore {
                 ref e if e.raw_os_error() == Some(EEXIST) => {
                     // Re-attempt to get the semaphore, this should in theory always
                     // succeed?
-                    semid = semget(key, 1, 0);
+                    semid = libc::semget(key, 1, 0);
                     if semid < 0 {
                         return Err(Error::last_os_error());
                     }
@@ -183,7 +107,7 @@ impl Semaphore {
                     let mut ok = false;
                     for _ in 0..1000 {
                         let mut buf: semid_ds = mem::zeroed();
-                        if semctl(semid, 0, IPC_STAT, &mut buf) != 0 {
+                        if libc::semctl(semid, 0, libc::IPC_STAT, &mut buf) != 0 {
                             return Err(Error::last_os_error());
                         }
                         if buf.sem_otime != 0 {
@@ -231,7 +155,7 @@ impl Semaphore {
     ///
     /// This function will ensure that the relevant file is located on the
     /// filesystem and will then invoke ftok on it.
-    unsafe fn key(name: &str) -> Result<key_t> {
+    unsafe fn key(name: &str) -> Result<libc::key_t> {
         let filename = Semaphore::filename(name);
         let dir = filename.parent().unwrap();
 
@@ -259,7 +183,7 @@ impl Semaphore {
         }
 
         // Invoke `ftok` with our filename
-        let key = ftok(filename.as_ptr(), 'I' as libc::c_int);
+        let key = libc::ftok(filename.as_ptr() as *const libc::c_char, 'I' as libc::c_int);
         if key != -1 {
             Ok(key)
         } else {
@@ -301,10 +225,14 @@ impl Semaphore {
     unsafe fn modify(&self, amt: i16, wait: bool) -> libc::c_int {
         let mut buf = sembuf {
             sem_num: 0,
-            sem_op: amt as libc::c_short,
-            sem_flg: if wait { 0 } else { IPC_NOWAIT } | SEM_UNDO,
+            sem_op: amt,
+            sem_flg: if wait {
+                0
+            } else {
+                libc::IPC_NOWAIT as libc::c_short
+            } | SEM_UNDO,
         };
-        semop(self.semid, &mut buf, 1)
+        libc::semop(self.semid, &mut buf, 1)
     }
 }
 
@@ -322,9 +250,8 @@ mod tests {
     use std::process::Command;
     use std::str;
 
-    use self::tempdir::TempDir;
-
-    use super::consts::{ipc_perm, sembuf, semid_ds};
+    use super::consts::semid_ds;
+    use tempdir::TempDir;
 
     macro_rules! offset {
         ($ty:ty, $f:ident) => {
@@ -359,70 +286,24 @@ mod tests {
     }}
 
 int main() {{
-    assert_eq(offsetof(struct sembuf, sem_num), {sem_num});
-    assert_eq(offsetof(struct sembuf, sem_op), {sem_op});
-    assert_eq(offsetof(struct sembuf, sem_flg), {sem_flg});
-    assert_eq(sizeof(struct sembuf), {sembuf});
-
-    assert_eq(offsetof(struct ipc_perm, {key}), {keyfield});
-    assert_eq(offsetof(struct ipc_perm, uid), {uid});
-    assert_eq(offsetof(struct ipc_perm, gid), {gid});
-    assert_eq(offsetof(struct ipc_perm, cuid), {cuid});
-    assert_eq(offsetof(struct ipc_perm, cgid), {cgid});
-    assert_eq(offsetof(struct ipc_perm, mode), {mode});
-    assert_eq(offsetof(struct ipc_perm, {seq}), {seqfield});
-    assert_eq(sizeof(struct ipc_perm), {ipc_perm});
-
     assert_eq(offsetof(struct semid_ds, sem_perm), {sem_perm});
     assert_eq(offsetof(struct semid_ds, sem_otime), {sem_otime});
     assert_eq(offsetof(struct semid_ds, sem_nsems), {sem_nsems});
     assert_eq(sizeof(struct semid_ds), {semid_ds});
 
-    assert_eq(IPC_CREAT, {IPC_CREAT});
-    assert_eq(IPC_EXCL, {IPC_EXCL});
-    assert_eq(IPC_NOWAIT, {IPC_NOWAIT});
     assert_eq(SEM_UNDO, {SEM_UNDO});
     assert_eq(SETVAL, {SETVAL});
-    assert_eq(IPC_STAT, {IPC_STAT});
-    assert_eq(IPC_RMID, {IPC_RMID});
     return 0;
 }}
 
 "#,
-                sem_num = offset!(sembuf, sem_num),
-                sem_op = offset!(sembuf, sem_op),
-                sem_flg = offset!(sembuf, sem_flg),
-                sembuf = mem::size_of::<sembuf>(),
-                keyfield = offset!(ipc_perm, __key),
-                uid = offset!(ipc_perm, uid),
-                gid = offset!(ipc_perm, gid),
-                cuid = offset!(ipc_perm, cuid),
-                cgid = offset!(ipc_perm, cgid),
-                mode = offset!(ipc_perm, mode),
-                seqfield = offset!(ipc_perm, __seq),
-                ipc_perm = mem::size_of::<ipc_perm>(),
                 sem_perm = offset!(semid_ds, sem_perm),
                 sem_otime = offset!(semid_ds, sem_otime),
                 // sem_ctime = offset!(semid_ds, sem_ctime),
                 sem_nsems = offset!(semid_ds, sem_nsems),
                 semid_ds = mem::size_of::<semid_ds>(),
-                IPC_CREAT = super::consts::IPC_CREAT,
-                IPC_EXCL = super::consts::IPC_EXCL,
-                IPC_NOWAIT = super::consts::IPC_NOWAIT,
                 SEM_UNDO = super::consts::SEM_UNDO,
                 SETVAL = super::consts::SETVAL,
-                IPC_STAT = super::consts::IPC_STAT,
-                IPC_RMID = super::consts::IPC_RMID,
-                key = if cfg!(target_os = "macos") {
-                    "_key"
-                } else {
-                    "__key"
-                },
-                seq = if cfg!(target_os = "macos") {
-                    "_seq"
-                } else {
-                    "__seq"
-                },
             )
             .into_bytes(),
         )
