@@ -7,6 +7,6 @@
 IPC utilities for windows/unix
 
 ```toml
-[dependencies.ipc]
-git = "https://github.com/slonopotamus/ipc-rs"
+[dependencies]
+ipc = { git = "https://github.com/slonopotamus/ipc-rs" }
 ```
