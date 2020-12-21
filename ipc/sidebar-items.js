@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Guard","An RAII guard used to release a semaphore automatically when it falls out of scope."],["Semaphore","An atomic counter which can be shared across processes."]]});
